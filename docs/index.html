@@ -108,6 +108,26 @@
     .controls > * { flex: 1 1 100%; } .controls select, .controls button { width: 100%; }
     .grid { grid-template-columns: 1fr; }
   }
+  .wtools { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+            color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .wtools button, .wbtn button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+            border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  .wbtn { display: flex; gap: 4px; } .wbtn button { padding: 4px 9px; font-size: 13px; color: var(--muted); }
+  .wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .wcard .tm { color: var(--muted); }
+  .ghead { margin: 10px 0 8px; font-size: 14px; color: var(--muted); } .ghead b { font-family: var(--mono); }
+  .box { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; }
+  .box div { background: var(--panel2); border-radius: 8px; padding: 6px 4px; text-align: center; }
+  .box span { display: block; font-size: 10.5px; color: var(--muted); letter-spacing: .5px; }
+  .box b { font-family: var(--mono); font-size: 16px; }
+  .box .up { box-shadow: inset 0 -3px 0 var(--good); } .box .dn { box-shadow: inset 0 -3px 0 var(--bad); }
+  .up { color: var(--good); } .dn { color: var(--bad); }
+  .avg { color: var(--muted); font-size: 12.5px; margin-top: 8px; } .avg b { color: var(--text); font-family: var(--mono); }
+  .live { background: var(--bad); color: #fff; font-weight: 700; font-size: 11px; border-radius: 4px; padding: 1px 6px; }
+  .msg.small { padding: 10px; font-size: 13px; }
+  button.link { background: none; border: 0; color: var(--accent2); cursor: pointer; padding: 8px 0 0; font: inherit; font-size: 13.5px; }
+  .sub button.link { padding: 0 0 0 8px; }
+  @media (max-width: 600px) { .wgrid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -119,6 +139,7 @@
   <div class="tabs">
     <button class="tab on" data-mode="player">Giocatore</button>
     <button class="tab" data-mode="team">Squadra</button>
+    <button class="tab" data-mode="watch">Osservati</button>
   </div>
   <div class="controls">
     <div class="search" id="playerBox">

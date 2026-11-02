@@ -145,7 +145,7 @@
       if (lv.ok) {
         if (lv.rows.length) (logs[meta.season] ||= []).push(...lv.rows);
         meta.schedule = lv.schedule;
-        liveNote = lv.games ? ` (+${lv.games} ${lv.games === 1 ? "partita appena finita" : "partite appena finite"})` : " (aggiornate a ora)";
+        liveNote = lv.games ? ` (+${lv.games} ${lv.games === 1 ? "partita appena finita" : "partite appena finite"})` : " a ora";
       }
     } catch { /* restano i dati dell'ultimo aggiornamento automatico */ }
     ctx = new M.Context({ ...meta, logs });
@@ -201,9 +201,15 @@
   document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
     document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
     mode = b.dataset.mode;
-    $("#playerBox").classList.toggle("hidden", mode !== "player");
+    $("#playerBox").classList.toggle("hidden", mode === "team");
     $("#team").classList.toggle("hidden", mode !== "team");
     $("#bothBox").classList.toggle("hidden", mode !== "team");
+    $("#opp").classList.toggle("hidden", mode === "watch");
+    $("#go").classList.toggle("hidden", mode === "watch");
+    $("#pq").placeholder = mode === "watch" ? "Aggiungi un giocatore da osservare…" : "Cerca un giocatore (es. Jokic, Tatum, Doncic)…";
+    if (mode === "watch") { $("#pq").value = ""; selected = null; }
+    if (mode === "watch" || selected || $("#team").value) run();
+    else $("#out").innerHTML = `<div class="msg">${mode === "team" ? "Scegli una squadra." : "Cerca un giocatore."}</div>`;
   });
 
   $("#pq").addEventListener("input", () => {
@@ -227,6 +233,7 @@
     $("#pq").value = selected.name;
     $("#sugg").classList.add("hidden");
     $("#pq").blur();
+    if (mode === "watch") { addWatch(selected); $("#pq").value = ""; selected = null; suggList = []; }
     run();
   }
   $("#pq").addEventListener("keydown", e => {
@@ -244,9 +251,11 @@
   function run() {
     if (!ctx) return;
     try {
+      if (mode === "watch") return renderWatch();
       if (mode === "player") {
         if (!selected) { if (suggList.length) return pick(0); return; }
         $("#out").innerHTML = renderPlayer(playerResult(selected.id));
+        $("#addw").onclick = () => { addWatch({ id: selected.id, name: selected.name }); $("#addw").textContent = "✓ tra gli osservati"; };
       } else {
         const t = $("#team").value;
         if (!t) return;
@@ -265,6 +274,137 @@
       window.scrollTo({ top: 0, behavior: "smooth" });
       run();
     });
+  }
+
+
+  // ------------------------------------------------------------ giocatori osservati
+  const WKEY = "nbaprops.watch";
+  let watch = (() => { try { return JSON.parse(localStorage.getItem(WKEY)) || []; } catch { return []; } })();
+  const saveWatch = () => { try { localStorage.setItem(WKEY, JSON.stringify(watch)); } catch { /* memoria non disponibile */ } };
+  function addWatch(p) { if (!watch.some(w => w.id === p.id)) { watch.push({ id: p.id, name: p.name }); saveWatch(); } }
+  function removeWatch(id) { watch = watch.filter(w => w.id !== id); saveWatch(); renderWatch(); }
+  function moveWatch(id, d) {
+    const i = watch.findIndex(w => w.id === id), j = i + d;
+    if (i < 0 || j < 0 || j >= watch.length) return;
+    [watch[i], watch[j]] = [watch[j], watch[i]]; saveWatch(); renderWatch();
+  }
+
+  const shortDate = d => new Date(d + (d.length === 10 ? "T12:00:00" : "")).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
+
+  function boxCells(l, avg) {
+    const cmp = (v, a) => a == null || a < 0.5 ? "" : v >= a * 1.25 ? "up" : v <= a * 0.75 ? "dn" : "";
+    const cells = [
+      ["MIN", l.min], ["PT", l.pts, cmp(l.pts, avg.PTS)], ["RB", l.reb, cmp(l.reb, avg.REB)],
+      ["AS", l.ast, cmp(l.ast, avg.AST)], ["3P", l.tp ?? l.fg3m, cmp(l.fg3m, avg.FG3M)],
+      ["TIRI", l.fg ?? `${l.fga} tent.`], ["TL", l.ft ?? `${l.fta} tent.`],
+      ["RUB", l.stl, cmp(l.stl, avg.STL)], ["STP", l.blk, cmp(l.blk, avg.BLK)], ["PP", l.tov],
+    ];
+    if (l.pm != null) cells.push(["+/-", l.pm]);
+    return `<div class="box">${cells.map(([k, v, c]) => `<div class="${c || ""}"><span>${k}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
+  }
+
+  function seasonAvg(pid) {
+    const cur = (ctx.playerLogs.get(pid) || []).filter(g => g.season === ctx.season && g.min > 0);
+    if (!cur.length) return { n: 0 };
+    const a = k => cur.reduce((x, g) => x + g[k], 0) / cur.length;
+    return { n: cur.length, PTS: a("pts"), REB: a("reb"), AST: a("ast"), FG3M: a("fg3m"), STL: a("stl"), BLK: a("blk"), MIN: a("min") };
+  }
+
+  function watchCard(w) {
+    const tri = ctx.playerTeam(w.id);
+    const logs = (ctx.playerLogs.get(w.id) || []).filter(g => g.min > 0);
+    const last = logs[0];
+    const live = tri && ctx.schedule.find(g => g.state === "in" && (g.home === tri || g.away === tri));
+    const next = tri && ctx.nextGame(tri);
+    const avg = seasonAvg(w.id);
+    const inj = ctx.injury(w.id);
+    let body;
+    if (live) body = `<div class="ghead"><span class="live">IN CORSO</span> ${live.home === tri ? "vs" : "@"} ${esc(live.home === tri ? live.away : live.home)}</div><div class="msg small">Carico il tabellino…</div>`;
+    else if (last) body = `<div class="ghead">${esc(shortDate(last.date))} · ${last.home ? "vs" : "@"} ${esc(last.opp)}</div>${boxCells(last, avg)}`;
+    else body = `<div class="msg small">Nessuna partita giocata nelle ultime stagioni.</div>`;
+    const avgLine = avg.n ? `<div class="avg">Media stagione (${avg.n} gare): <b>${avg.PTS.toFixed(1)}</b> pt · <b>${avg.REB.toFixed(1)}</b> rb · <b>${avg.AST.toFixed(1)}</b> as · <b>${avg.FG3M.toFixed(1)}</b> triple · ${avg.MIN.toFixed(0)} min</div>` : "";
+    const nextLine = next && !live ? `<div class="avg">Prossima: ${next.home ? "vs" : "@"} <b>${esc(next.opp)}</b> · ${esc(fmtDate(next.utc))}</div>` : "";
+    return `<div class="card wcard" id="w-${w.id}">
+      <div class="top"><div><span class="name">${esc(ctx.names.get(w.id) || w.name)}</span> <small class="tm">${esc(tri || "—")}</small>
+        ${inj ? `<span class="inj" title="${esc(inj.comment)}">${esc(inj.status)}</span>` : ""}</div>
+        <div class="wbtn"><button data-up="${w.id}" title="Su">↑</button><button data-dn="${w.id}" title="Giù">↓</button><button data-rm="${w.id}" title="Rimuovi">✕</button></div></div>
+      <div class="wbody" data-gid="${live ? live.id : last ? last.gid : ""}" data-live="${live ? 1 : ""}">${body}</div>
+      ${avgLine}${nextLine}
+      ${tri && next ? `<button class="link" data-proj="${w.id}">Vedi la proiezione per la prossima partita →</button>` : ""}
+    </div>`;
+  }
+
+  function fullLine(sum, pid) {
+    for (const side of ((sum.boxscore || {}).players || [])) {
+      for (const block of side.statistics || []) {
+        const labels = (block.labels || block.names || []).map(x => String(x).toUpperCase());
+        const ix = Object.fromEntries(labels.map((l, i) => [l, i]));
+        for (const a of block.athletes || []) {
+          if (+(a.athlete || {}).id !== pid) continue;
+          const st = a.stats || [];
+          if (a.didNotPlay || !st.length) return { dnp: true, reason: a.reason || "" };
+          const v = k => k in ix ? st[ix[k]] : "–";
+          return { min: v("MIN"), pts: num(v("PTS")), reb: num(v("REB")), ast: num(v("AST")), fg: v("FG"), tp: v("3PT"),
+                   fg3m: madeAtt(v("3PT"))[0], ft: v("FT"), stl: num(v("STL")), blk: num(v("BLK")), tov: num(v("TO")), pm: v("+/-") };
+        }
+      }
+    }
+    return null;
+  }
+
+  function gameHeader(sum, tri) {
+    const comp = ((sum.header || {}).competitions || [])[0] || {};
+    let me = null, op = null;
+    for (const c of comp.competitors || []) { if (triOf((c.team || {}).abbreviation) === tri) me = c; else op = c; }
+    const st = ((comp.status || {}).type) || {};
+    if (!me || !op) return "";
+    const where = me.homeAway === "home" ? "vs" : "@";
+    const oppTri = triOf((op.team || {}).abbreviation) || "";
+    const score = `${me.score ?? ""}-${op.score ?? ""}`;
+    const det = String(st.shortDetail || "").replace(/Halftime/i, "Intervallo").replace(/End of /i, "Fine ")
+      .replace(/(\d)(st|nd|rd|th)\b/g, "$1° quarto").replace(/OT/g, "suppl.");
+    if (st.state === "in") return `<span class="live">IN CORSO</span> ${where} ${esc(oppTri)} · ${esc(score)} · ${esc(det)}`;
+    const res = st.completed ? (me.winner ? `<b class="up">V</b> ${esc(score)}` : `<b class="dn">S</b> ${esc(score)}`) : "";
+    const date = comp.date ? new Date(comp.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }) : "";
+    return `${esc(date)} · ${where} ${esc(oppTri)} · ${res}`;
+  }
+
+  async function enrichWatch(w) {
+    const el = document.querySelector(`#w-${w.id} .wbody`);
+    if (!el || !el.dataset.gid) return;
+    try {
+      const sum = await espn(`summary?event=${el.dataset.gid}`);
+      const tri = ctx.playerTeam(w.id);
+      const line = fullLine(sum, w.id);
+      const head = gameHeader(sum, tri);
+      let html = `<div class="ghead">${head}</div>`;
+      if (!line) html += `<div class="msg small">${el.dataset.live ? "Non è ancora entrato in campo." : "Tabellino non disponibile."}</div>`;
+      else if (line.dnp) html += `<div class="msg small">Non ha giocato${line.reason ? ": " + esc(line.reason) : ""}.</div>`;
+      else html += boxCells(line, el.dataset.live ? {} : seasonAvg(w.id));  // niente confronti a partita in corso
+      if (document.body.contains(el)) el.innerHTML = html;
+    } catch { /* restano i dati salvati */ }
+  }
+
+  function renderWatch() {
+    if (!watch.length) {
+      $("#out").innerHTML = `<div class="msg">Nessun giocatore osservato.<br>Cercane uno qui sopra per aggiungerlo: vedrai il tabellino della sua ultima partita
+        (o di quella in corso).</div>`;
+      return;
+    }
+    $("#out").innerHTML = `<div class="wtools"><span>${watch.length} ${watch.length === 1 ? "giocatore" : "giocatori"} · <span class="up">verde</span>/<span class="dn">rosso</span> = molto sopra/sotto la sua media</span>
+      <button id="wref">Aggiorna tabellini</button></div><div class="wgrid">${watch.map(watchCard).join("")}</div>`;
+    $("#wref").onclick = async () => { await loadData(); renderWatch(); };
+    document.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => removeWatch(+b.dataset.rm));
+    document.querySelectorAll("[data-up]").forEach(b => b.onclick = () => moveWatch(+b.dataset.up, -1));
+    document.querySelectorAll("[data-dn]").forEach(b => b.onclick = () => moveWatch(+b.dataset.dn, 1));
+    document.querySelectorAll("[data-proj]").forEach(b => b.onclick = () => {
+      const id = +b.dataset.proj;
+      selected = { id, name: ctx.names.get(id) };
+      document.querySelector('.tab[data-mode="player"]').click();
+      $("#pq").value = selected.name;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    watch.forEach(enrichWatch);
   }
 
   // ------------------------------------------------------------ render
@@ -312,7 +452,8 @@
       : `<tr><td colspan="6" style="color:var(--muted)">Nessun precedente nelle ultime stagioni</td></tr>`;
     return `
     <div class="hero">
-      <div><h2>${esc(d.player.name)}</h2><div class="sub">${esc(d.player.team.name)}</div>
+      <div><h2>${esc(d.player.name)}</h2><div class="sub">${esc(d.player.team.name)}
+        <button class="link" id="addw" data-id="${d.player.id}">${watch.some(w => w.id === d.player.id) ? "✓ tra gli osservati" : "+ Osserva"}</button></div>
         ${matchupLine(d.player.team.tri, d.game, d.opponent.tri)}</div>
       <div class="kpis">
         <div class="kpi"><b>${d.minutes}</b><span>minuti attesi</span></div>
