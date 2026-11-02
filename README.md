@@ -1,4 +1,4 @@
-# NBA Props
+# NBA Stats
 
 Web app che stima le statistiche più probabili dei giocatori NBA nella prossima partita,
 in base all'avversario. Funziona dal telefono e dal computer, senza installare nulla.

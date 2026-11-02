@@ -1,6 +1,6 @@
 {
-  "name": "NBA Props",
-  "short_name": "NBA Props",
+  "name": "NBA Stats",
+  "short_name": "NBA Stats",
   "description": "Proiezioni statistiche dei giocatori NBA contro il prossimo avversario",
   "start_url": "./",
   "scope": "./",
