@@ -1,36 +1,3 @@
-Stagione 2026-27: controllo le partite dal 2026-10-01 al 2026-11-02
-Stagione 2026-27: 92 partite nuove
-Fatto: 2026-11-02T14:39:15Z 2 file, 113 partite in calendario
-Stagione 2024-25: scarico il calendario...
-Stagione 2024-25: 1231 partite, scarico i box score...
-  100/1231 partite
-  200/1231 partite
-  300/1231 partite
-  400/1231 partite
-  500/1231 partite
-  600/1231 partite
-  700/1231 partite
-  800/1231 partite
-  900/1231 partite
-  1000/1231 partite
-  1100/1231 partite
-  1200/1231 partite
-Stagione 2024-25: salvate 26231 righe
-Stagione 2025-26: scarico il calendario...
-Stagione 2025-26: 1231 partite, scarico i box score...
-  100/1231 partite
-  200/1231 partite
-  300/1231 partite
-  400/1231 partite
-  500/1231 partite
-  600/1231 partite
-  700/1231 partite
-  800/1231 partite
-  900/1231 partite
-  1000/1231 partite
-  1100/1231 partite
-  1200/1231 partite
-Stagione 2025-26: salvate 26558 righe
 Stagione 2026-27: controllo le partite dal 2026-10-29 al 2026-11-02
 Stagione 2026-27: 0 partite nuove
-Fatto: 2026-11-02T14:40:57Z 4 file, 113 partite in calendario
+Fatto: 2026-11-02T14:53:55Z 4 file, 113 partite in calendario
