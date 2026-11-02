@@ -37,6 +37,96 @@
     } catch { return null; } finally { clearTimeout(t); }
   }
 
+
+  // ------------------------------------------------------------ partite nuove direttamente da ESPN
+  const ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/";
+  const ALIAS = { GS: "GSW", NY: "NYK", SA: "SAS", NO: "NOP", UTAH: "UTA", WSH: "WAS", PHO: "PHX", BRK: "BKN", NOR: "NOP" };
+  const triOf = a => { const t = ALIAS[a] || a; return M.TEAM[t] ? t : null; };
+  const num = x => { const n = parseFloat(x); return isNaN(n) ? 0 : n; };
+  const madeAtt = x => { const m = /(\d+)\s*-\s*(\d+)/.exec(String(x || "")); return m ? [+m[1], +m[2]] : [0, 0]; };
+  const ymd = d => d.toISOString().slice(0, 10);
+
+  async function espn(path, ms = 8000) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try { return await getJSON(ESPN + path, { signal: ctrl.signal, cache: "no-store" }); }
+    finally { clearTimeout(t); }
+  }
+
+  function parseEvent(ev, day) {
+    const comp = (ev.competitions || [{}])[0];
+    const teams = {};
+    for (const c of comp.competitors || []) { const t = triOf((c.team || {}).abbreviation); if (t) teams[c.homeAway] = t; }
+    if (!teams.home || !teams.away) return null;
+    const st = ((comp.status || ev.status || {}).type) || {};
+    return { id: String(ev.id), date: day, utc: ev.date, home: teams.home, away: teams.away,
+             state: st.state, completed: !!st.completed, stype: (ev.season || {}).type };
+  }
+
+  function parseSummary(sum, ev) {
+    const rows = [];
+    for (const side of ((sum.boxscore || {}).players || [])) {
+      const tri = triOf((side.team || {}).abbreviation);
+      if (!tri) continue;
+      const home = tri === ev.home, opp = home ? ev.away : ev.home;
+      for (const block of side.statistics || []) {
+        const labels = (block.labels || block.names || []).map(x => String(x).toUpperCase());
+        const ix = Object.fromEntries(labels.map((l, i) => [l, i]));
+        if (!("MIN" in ix) || !("PTS" in ix)) continue;
+        for (const a of block.athletes || []) {
+          const st = a.stats || [];
+          if (a.didNotPlay || st.length < labels.length) continue;
+          const v = k => k in ix ? st[ix[k]] : null;
+          const m = String(v("MIN") || "");
+          const min = m.includes(":") ? num(m.split(":")[0]) + num(m.split(":")[1]) / 60 : num(m);
+          if (min <= 0) continue;
+          const ath = a.athlete || {};
+          rows.push({ pid: +ath.id, name: ath.displayName || ath.shortName, tri, gid: ev.id, date: ev.date, opp,
+                      home: home ? 1 : 0, min: Math.round(min * 10) / 10, pts: num(v("PTS")), reb: num(v("REB")),
+                      oreb: num(v("OREB")), ast: num(v("AST")), fg3m: madeAtt(v("3PT"))[0], stl: num(v("STL")),
+                      blk: num(v("BLK")), tov: num(v("TO")), fga: madeAtt(v("FG"))[1], fta: madeAtt(v("FT"))[1] });
+        }
+      }
+    }
+    return rows;
+  }
+
+  /* Scarica le partite concluse dopo l'ultimo aggiornamento automatico e aggiorna il calendario. */
+  async function liveGames(meta, curLogs) {
+    const have = new Set(curLogs.map(r => r.gid));
+    const last = curLogs.reduce((a, r) => r.date > a ? r.date : a, "");
+    // data di oggi negli USA (ESPN ragiona con le date americane)
+    const todayUS = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const end = new Date(Date.UTC(todayUS.getFullYear(), todayUS.getMonth(), todayUS.getDate()));
+    let d = last ? new Date(last + "T00:00:00Z") : new Date(end);
+    if (end - d > 10 * 864e5) d = new Date(end - 10 * 864e5);   // al massimo 10 giorni indietro
+    const days = [];
+    for (; d <= end; d = new Date(+d + 864e5)) days.push(ymd(d));
+    const boards = await Promise.all(days.map(day =>
+      espn(`scoreboard?dates=${day.replace(/-/g, "")}&limit=100`).then(b => [day, b]).catch(() => [day, null])));
+    const events = [];
+    const states = new Map();
+    for (const [day, b] of boards) {
+      if (!b) continue;
+      for (const raw of b.events || []) {
+        const ev = parseEvent(raw, day);
+        if (!ev) continue;
+        states.set(ev.id, ev);
+        if (ev.completed && ev.stype === 2 && !have.has(ev.id)) events.push(ev);
+      }
+    }
+    // aggiorna lo stato delle partite in calendario (in corso / finite)
+    const schedule = (meta.schedule || []).map(g => states.has(g.id) ? { ...g, state: states.get(g.id).state } : g)
+      .filter(g => g.state !== "post");
+    const rows = [];
+    for (let i = 0; i < events.length; i += 4) {
+      const chunk = await Promise.all(events.slice(i, i + 4).map(ev =>
+        espn(`summary?event=${ev.id}`).then(s => parseSummary(s, ev)).catch(() => null)));
+      for (const r of chunk) if (r) rows.push(...r);
+    }
+    return { rows, games: new Set(rows.map(r => r.gid)).size, schedule, ok: boards.some(([, b]) => b) };
+  }
+
   async function loadData() {
     $("#status").textContent = "Caricamento dati…";
     const meta = await getJSON("data/meta.json", { cache: "no-store" });
@@ -47,14 +137,27 @@
       const season = f.split("/").pop().slice(0, 7);
       (logs[season] ||= []).push(...M.decodeLogFile(j));
     }
+    // partite finite dopo l'ultimo aggiornamento automatico: le scarico subito da ESPN
+    $("#status").textContent = "Cerco partite nuove su ESPN…";
+    let liveNote = "";
+    try {
+      const lv = await liveGames(meta, logs[meta.season] || []);
+      if (lv.ok) {
+        if (lv.rows.length) (logs[meta.season] ||= []).push(...lv.rows);
+        meta.schedule = lv.schedule;
+        liveNote = lv.games ? ` (+${lv.games} ${lv.games === 1 ? "partita appena finita" : "partite appena finite"})` : " (aggiornate a ora)";
+      }
+    } catch { /* restano i dati dell'ultimo aggiornamento automatico */ }
     ctx = new M.Context({ ...meta, logs });
-    let injSrc = "aggiornamento dati";
+    let injSrc = "ultimo aggiornamento";
     const live = await liveInjuries();
-    if (live) { ctx.setInjuries(live); injSrc = "ESPN in tempo reale"; }
+    if (live) { ctx.setInjuries(live); injSrc = "in tempo reale"; }
     const upd = meta.updated_at ? new Date(meta.updated_at).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "?";
-    $("#status").innerHTML = `Stagione ${esc(ctx.season)} · statistiche al ${esc(upd)} · infortuni: ${esc(injSrc)}
-      <button id="refresh">Ricarica</button>`;
+    $("#status").innerHTML = liveNote
+      ? `Stagione ${esc(ctx.season)} · statistiche aggiornate${esc(liveNote)} · infortuni ${esc(injSrc)} <button id="refresh">Ricarica</button>`
+      : `Stagione ${esc(ctx.season)} · statistiche al ${esc(upd)} · infortuni ${esc(injSrc)} <button id="refresh">Ricarica</button>`;
     $("#refresh").onclick = async () => { await loadData(); run(); };
+    if (selected || $("#team").value) run();
   }
 
   function teamOptions() {

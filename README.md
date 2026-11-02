@@ -23,11 +23,13 @@ tools/update_data.py  ── ESPN ──►  docs/data/*.json  ──►  docs/i
 - `docs/model.js` è il modello: rendimento al minuto pesato sulle partite recenti × minuti attesi
   × ritmo della partita × quanto concede la difesa avversaria (per 100 possessi, rispetto alla
   media NBA) + precedenti diretti. Le probabilità usano una binomiale negativa.
-- `docs/app.js` è l'interfaccia.
+- `docs/app.js` è l'interfaccia. All'apertura scarica direttamente da ESPN le partite finite
+  dopo l'ultimo aggiornamento automatico, quindi i dati sono sempre aggiornati.
 
 ## Comandi utili
 
-- Aggiornare i dati subito: tab **Actions** → *Aggiorna dati NBA* → **Run workflow**.
+- Non serve aggiornare a mano: l'app recupera da sola le partite più recenti (pulsante **Ricarica**).
+  L'aggiornamento automatico su GitHub serve a tenere leggero il caricamento.
 - Gli aggiornamenti programmati si fermano se il repository resta senza attività per 60 giorni
   (es. in estate): basta riattivarli dalla tab Actions.
 
