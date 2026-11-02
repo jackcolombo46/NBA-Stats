@@ -1,0 +1,29 @@
+name: Test fonti dati
+
+on:
+  push:
+    paths: ["tools/test_sources.py", ".github/workflows/test-sources.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Prova le fonti
+        run: python tools/test_sources.py
+      - name: Riepilogo
+        run: cat test-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Salva il report nel repository
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add test-report.md
+          git commit -m "Report test fonti dati" || exit 0
+          git push
