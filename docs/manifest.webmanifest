@@ -1,8 +1,9 @@
 {
   "name": "NBA Stats",
+  "id": "nba-stats",
   "short_name": "NBA Stats",
   "description": "Proiezioni statistiche dei giocatori NBA contro il prossimo avversario",
-  "start_url": "./",
+  "start_url": "./?app=nba-stats",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0e1116",
