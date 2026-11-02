@@ -196,7 +196,10 @@
       const r = this.rosters[String(pid)];
       if (r && TEAM[r.tri]) return r.tri;
       const logs = this.playerLogs.get(pid);
-      return logs && logs.length ? logs[0].tri : null;
+      if (!logs || !logs.length) return null;
+      // con le rose disponibili, chi non è in nessuna rosa e non ha giocato quest'anno è fuori dalla NBA
+      if (Object.keys(this.rosters).length && logs[0].season !== this.season) return null;
+      return logs[0].tri;
     }
 
     searchPlayers(q, limit = 10) {
@@ -347,7 +350,7 @@
         if (!p) continue;
         const out_ = p.injury && /^(out|suspension)/i.test(p.injury.status || "");
         if (out_ || p.missed >= 3 || (p.games.season === 0 && hasCur)) {
-          absent.push({ id: pid, name: p.player.name, reason: out_ ? p.injury.status : `assente da ${p.missed} partite` });
+          absent.push({ id: pid, name: p.player.name, reason: out_ ? p.injury.status : p.games.season === 0 ? "nessuna partita quest'anno" : `assente da ${p.missed} partite` });
           continue;
         }
         if (p.minutes < minMinutes) continue;
