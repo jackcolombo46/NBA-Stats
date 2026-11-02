@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-data
+  group: update-data-v2
   cancel-in-progress: false
 
 jobs:
@@ -27,9 +27,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Scarica i dati da ESPN
-        run: python tools/update_data.py
-      - name: Salva i dati
+      - name: Stagione in corso
+        run: |
+          set -o pipefail
+          mkdir -p docs/data
+          python tools/update_data.py --skip-past 2>&1 | tee docs/data/update-log.txt
+      - name: Salva (stagione in corso)
         if: always()
         run: |
           git config user.name "github-actions[bot]"
@@ -37,5 +40,19 @@ jobs:
           git add docs/data
           git diff --cached --quiet && exit 0
           git commit -m "Dati aggiornati $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git pull --rebase -q origin main
+          git pull --rebase -q -X ours origin main || (git rebase --abort; git pull -q --no-rebase -X ours origin main)
+          git push
+      - name: Stagioni passate (solo la prima volta)
+        run: |
+          set -o pipefail
+          python tools/update_data.py 2>&1 | tee -a docs/data/update-log.txt
+      - name: Salva (stagioni passate)
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          git diff --cached --quiet && exit 0
+          git commit -m "Dati aggiornati $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git pull --rebase -q -X ours origin main || (git rebase --abort; git pull -q --no-rebase -X ours origin main)
           git push

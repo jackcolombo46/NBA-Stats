@@ -210,14 +210,17 @@ def season_events(y, until):
 
 # ------------------------------------------------------------ passi
 
-def backfill_past(y_cur, n_past):
+def backfill_past(y_cur, n_past, download=True):
     files = []
     for k in range(n_past, 0, -1):
         s = season_str(y_cur - k)
         path = os.path.join(LOGS, f"{s}.json")
-        files.append(f"logs/{s}.json")
         if os.path.exists(path):
+            files.append(f"logs/{s}.json")
             continue
+        if not download:
+            continue
+        files.append(f"logs/{s}.json")
         log(f"Stagione {s}: scarico il calendario...")
         evs = season_events(y_cur - k, dt.date.today())
         log(f"Stagione {s}: {len(evs)} partite, scarico i box score...")
@@ -308,13 +311,14 @@ def injuries():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--past", type=int, default=2, help="stagioni passate da tenere")
+    ap.add_argument("--skip-past", action="store_true", help="non scaricare stagioni passate mancanti")
     args = ap.parse_args()
     today = dt.date.today()
     y = season_start_year(today)
     os.makedirs(LOGS, exist_ok=True)
     meta = read_json(os.path.join(DATA, "meta.json"), {}) or {}
 
-    past_files = backfill_past(y, args.past)
+    past_files = backfill_past(y, args.past, download=not args.skip_past)
     cur_files = update_current(y, today)
     meta.update({"season": season_str(y), "seasons": [season_str(y - k) for k in range(args.past + 1)],
                  "files": past_files + cur_files})
