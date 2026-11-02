@@ -1,5 +1,8 @@
 # NBA Stats
 
+> **Questa app non è più aggiornata.** Ora fa parte di **Sports Stats** (NBA e Serie A in un'unica app):
+> https://jackcolombo46.github.io/Sports-Stats/nba/ · codice: https://github.com/jackcolombo46/Sports-Stats
+
 Web app che stima le statistiche più probabili dei giocatori NBA nella prossima partita,
 in base all'avversario. Funziona dal telefono e dal computer, senza installare nulla.
 
