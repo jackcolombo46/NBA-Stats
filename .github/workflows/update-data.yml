@@ -1,0 +1,41 @@
+name: Aggiorna dati NBA
+
+on:
+  schedule:
+    # orari UTC: dopo le partite USA (mattina in Italia), primo pomeriggio e sera
+    - cron: "23 7 * * *"
+    - cron: "41 13 * * *"
+    - cron: "17 19 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["tools/update_data.py", ".github/workflows/update-data.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scarica i dati da ESPN
+        run: python tools/update_data.py
+      - name: Salva i dati
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          git diff --cached --quiet && exit 0
+          git commit -m "Dati aggiornati $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git pull --rebase -q origin main
+          git push
