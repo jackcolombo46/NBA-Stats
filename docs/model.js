@@ -345,7 +345,7 @@
       for (const pid of this.teamPlayers(tri)) {
         const p = this.project(pid, opp, home);
         if (!p) continue;
-        const out_ = p.injury && /^out/i.test(p.injury.status || "");
+        const out_ = p.injury && /^(out|suspension)/i.test(p.injury.status || "");
         if (out_ || p.missed >= 3 || (p.games.season === 0 && hasCur)) {
           absent.push({ id: pid, name: p.player.name, reason: out_ ? p.injury.status : `assente da ${p.missed} partite` });
           continue;
